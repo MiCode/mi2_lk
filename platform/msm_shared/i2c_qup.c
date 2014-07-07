@@ -1,4 +1,5 @@
 /* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -676,6 +677,49 @@ int qup_i2c_xfer(struct qup_i2c_dev *dev, struct i2c_msg msgs[], int num)
 	dev->cnt = 0;
 	mask_interrupt(dev->qup_irq);
 	return ret;
+}
+
+uint8_t i2c_read(struct qup_i2c_dev *dev, uint8_t i2c_addr, uint8_t reg_addr)
+{
+	uint8_t ret = 0;
+	/* Create a i2c_msg buffer, that is used to put the controller
+	 * into read mode and then to read some data.
+	 */
+	struct i2c_msg msg_buf[] = {
+		{i2c_addr, I2C_M_WR, 1, &reg_addr},
+		{i2c_addr, I2C_M_RD, 1, &ret}
+	};
+
+	if (!dev)
+		return -1;
+
+	qup_i2c_xfer(dev, msg_buf, 2);
+
+	return ret;
+}
+
+uint8_t i2c_write(struct qup_i2c_dev *dev, uint8_t i2c_addr, uint8_t reg_addr, uint8_t reg_val)
+{
+	uint8_t data_buf[] = { reg_addr, reg_val };
+
+	/* Create a i2c_msg buffer, that is used to put the controller
+	 * into write mode and then to write some data.
+	 */
+	struct i2c_msg msg_buf[] = {
+		{i2c_addr, I2C_M_WR, 2, data_buf}
+	};
+
+	if (!dev)
+		return -1;
+
+	qup_i2c_xfer(dev, msg_buf, 1);
+
+	/* Double check that the write worked. */
+	if (reg_val != i2c_read(dev, i2c_addr, reg_addr)) {
+		return -1;
+	}
+
+	return 0;
 }
 
 struct qup_i2c_dev *qup_i2c_init(uint8_t gsbi_id, unsigned clk_freq,

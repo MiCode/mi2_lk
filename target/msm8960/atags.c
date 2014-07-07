@@ -1,4 +1,5 @@
 /* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -32,6 +33,7 @@
 #include <stdint.h>
 #include "board.h"
 #include "baseband.h"
+#include "../../app/aboot/aboot.h"
 
 #define SIZE_1M     (1024 * 1024)
 #define SIZE_2M     (2 * SIZE_1M)
@@ -197,6 +199,33 @@ unsigned *target_atag_mem(unsigned *ptr)
 	}
 
 	return ptr;
+}
+
+unsigned * target_atag_pureason(unsigned* ptr)
+{
+       *ptr++ = 3;
+       *ptr++ = 0xf1000401;
+       *ptr++ = pu_reason;
+
+       return ptr;
+}
+
+unsigned * target_atag_memvendor(unsigned* ptr)
+{
+       *ptr++ = 3;
+       *ptr++ = 0xf1000402;
+       *ptr++ = target_check_ddrinfo();
+
+       return ptr;
+}
+
+unsigned * target_atag_hwversion(unsigned* ptr)
+{
+       *ptr++ = 3;
+       *ptr++ = 0xf1000403;
+       *ptr++ = board_platform_version();
+
+       return ptr;
 }
 
 void *target_get_scratch_address(void)

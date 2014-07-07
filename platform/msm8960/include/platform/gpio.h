@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -53,9 +54,31 @@
 #define GPIO_ENABLE     1
 #define GPIO_DISABLE    0
 
+#define GPIO_BASE_REG(x) (TLMM_BASE_ADDR + 0x3000 + (x))
+
+/* output value */
+#define GPIO_OUT_0      GPIO_BASE_REG(0x00) /* gpio  31-0   */
+#define GPIO_OUT_1      GPIO_BASE_REG(0x04) /* gpio  63-31  */
+#define GPIO_OUT_2      GPIO_BASE_REG(0x08) /* gpio  89-64  */
+
+/* same pin map as above, output enable */
+#define GPIO_OE_0       GPIO_BASE_REG(0x80)
+#define GPIO_OE_1       GPIO_BASE_REG(0x84)
+#define GPIO_OE_2       GPIO_BASE_REG(0x88)
+
+/* same pin map as above, input read */
+#define GPIO_IN_0       GPIO_BASE_REG(0x60)
+#define GPIO_IN_1       GPIO_BASE_REG(0x64)
+#define GPIO_IN_2       GPIO_BASE_REG(0x68)
+
+/* GPIO_IN_OUT: OUTPUT LEVEL */
+#define GPIO_IN_OUT_HIGH	0x2
+#define GPIO_IN_OUT_LOW		0x00
+
 void gpio_config_i2c(uint8_t gsbi_id);
 void gpio_config_uart_dm(uint8_t id);
 void msm8960_keypad_gpio_init();
 void msm8930_keypad_gpio_init();
-
+void pmic8921_gpio_set(uint32_t gpio, uint32_t level);
+uint32_t pmic8921_gpio_get(uint32_t gpio);
 #endif

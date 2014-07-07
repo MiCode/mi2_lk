@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -148,8 +149,8 @@ int mdp_setup_dma_p_video_mode(unsigned short disp_width,
 				unsigned short img_width_full_size,
 				unsigned short pack_pattern,
 				unsigned char ystride);
-int mipi_dsi_cmd_config(struct fbcon_config mipi_fb_cfg,
-			unsigned short num_of_lanes);
+int mipi_dsi_cmd_config(unsigned short width, unsigned short height,
+		                    unsigned short num_of_lanes);
 void mdp_shutdown(void);
 void mdp_disable(void);
 void mdp_start_dma(void);

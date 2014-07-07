@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -40,8 +41,8 @@
 #define KEYMAP_INDEX(row, col) (row)* BITS_IN_ELEMENT(unsigned int) + (col)
 
 unsigned int msm8960_qwerty_keymap[] = {
-	[KEYMAP_INDEX(0, 0)] = KEY_VOLUMEUP,	/* Volume key on the device/CDP */
-	[KEYMAP_INDEX(0, 1)] = KEY_VOLUMEDOWN,	/* Volume key on the device/CDP */
+	[KEYMAP_INDEX(0, 0)] = KEY_VOLUMEDOWN,	/* Volume key on the device/CDP */
+	[KEYMAP_INDEX(0, 1)] = KEY_VOLUMEUP,	/* Volume key on the device/CDP */
 };
 
 unsigned int msm8960_keys_gpiomap[] = {
@@ -83,8 +84,8 @@ unsigned int apq8064_qwerty_keymap[] = {
 };
 
 unsigned int apq8064_keys_gpiomap[] = {
-	[KEYMAP_INDEX(0, 0)] = PM_GPIO(35),	/* Volume key on the device/CDP */
-	[KEYMAP_INDEX(0, 1)] = PM_GPIO(38),	/* Volume key on the device/CDP */
+	[KEYMAP_INDEX(0, 0)] = PM_GPIO(1),	/* Volume key on the device/CDP */
+	[KEYMAP_INDEX(0, 1)] = PM_GPIO(2),	/* Volume key on the device/CDP */
 };
 
 

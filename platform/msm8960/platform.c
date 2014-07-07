@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,7 +43,7 @@ extern void platform_init_timer(void);
 extern void platform_panel_backlight_on(void);
 extern void platform_uninit_timer(void);
 extern void mipi_panel_reset(void);
-extern void mipi_dsi_panel_power_on(void);
+extern void mipi_dsi_panel_power_on(unsigned int on);
 extern void mdp_clock_init(void);
 extern void mmss_clock_init(void);
 extern struct fbcon_config *mipi_init(void);
@@ -80,7 +81,7 @@ mmu_section_t mmu_section_table[] = {
 /*  Physical addr,    Virtual addr,    Size (in MB),    Flags */
 	{MEMBASE, MEMBASE, (MEMSIZE / MB), LK_MEMORY},
 	{BASE_ADDR, BASE_ADDR, 44, KERNEL_MEMORY},
-	{SCRATCH_ADDR, SCRATCH_ADDR, 128, SCRATCH_MEMORY},
+	{SCRATCH_ADDR, SCRATCH_ADDR, 512, SCRATCH_MEMORY},
 	{MSM_IOMAP_BASE, MSM_IOMAP_BASE, MSM_IOMAP_SIZE, IOMAP_MEMORY},
 	{MSM_IMEM_BASE, MSM_IMEM_BASE, 1, IMEM_MEMORY},
 };

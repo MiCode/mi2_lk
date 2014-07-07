@@ -1,4 +1,5 @@
 /* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -33,11 +34,15 @@
 #include <mdp4.h>
 #include <target/display.h>
 #include <target/board.h>
+#include <gsbi.h>
+#include <i2c_qup.h>
+#include <platform/iomap.h>
 
 static struct msm_fb_panel_data panel;
 static uint8_t display_enable;
 
 extern int msm_display_init(struct msm_fb_panel_data *pdata);
+extern int msm_display_on();
 extern int msm_display_off();
 
 static int apq8064_lvds_panel_power(int enable)
@@ -71,19 +76,58 @@ static int apq8064_lvds_clock(int enable)
 	return 0;
 }
 
+#define PM8921_GPIO_LCD_DCDC_EN         11
+#define PM8921_GPIO_PANEL_RESET         25
+#define PM8921_GPIO_PANEL_ID            12
+
+int panel_id_detection()
+{
+	unsigned int lcd_id_det = 2;
+	lcd_id_det = pmic8921_gpio_get(PM8921_GPIO_PANEL_ID);
+	return lcd_id_det;
+}
+
 static int fusion3_mtp_panel_power(int enable)
 {
+	unsigned int lcd_id_det = 2;
 	if (enable) {
-		/* Enable LVS7 */
-		pm8921_low_voltage_switch_enable(7);
-
 		/* Set and enabale LDO2 1.2V for  VDDA_MIPI_DSI0/1_PLL */
 		pm8921_ldo_set_voltage(LDO_2, LDO_VOLTAGE_1_2V);
 
-		/* Set and enabale LDO11 3.0V for  LCD1_MIPI_AVDD */
-		pm8921_ldo_set_voltage(LDO_11, LDO_VOLTAGE_3_0V);
+		mi_display_gpio_init();
 
-		apq8064_display_gpio_init();
+		/* Initial condition */
+		pmic8921_gpio_set(PM8921_GPIO_PANEL_RESET, 0);
+		pmic8921_gpio_set(PM8921_GPIO_LCD_DCDC_EN, 0);
+		pm8921_ldo_clear_voltage(LDO_23);
+		mdelay(8);
+
+		/* Enable LVS7 */
+		pm8921_low_voltage_switch_enable(lvs_7);
+		pm8921_ldo_set_voltage(LDO_23, LDO_VOLTAGE_1_8V);
+		mdelay(10);
+
+		/* Enable VSP VSN */
+		pmic8921_gpio_set(PM8921_GPIO_LCD_DCDC_EN, 1);
+		mdelay(8);
+
+		/* Reset */
+		pmic8921_gpio_set(PM8921_GPIO_PANEL_RESET, 1);
+		mdelay(3);
+
+		lcd_id_det = pmic8921_gpio_get(PM8921_GPIO_PANEL_ID);
+	} else {
+		if (!target_cont_splash_screen()) {
+			/* Reset down */
+			pmic8921_gpio_set(PM8921_GPIO_PANEL_RESET, 0);
+
+			/* Disable VSP VSN */
+			pmic8921_gpio_set(PM8921_GPIO_LCD_DCDC_EN, 0);
+			mdelay(8);
+
+			/* Disable 1V8 */
+			pm8921_ldo_clear_voltage(LDO_23);
+		}
 	}
 
 	return 0;
@@ -94,7 +138,7 @@ static int fusion3_mtp_clock(int enable)
 	if (enable) {
 		mdp_clock_init();
 		mmss_clock_init();
-	} else if(!target_cont_splash_screen()) {
+	} else if (!target_cont_splash_screen()) {
 		mmss_clock_disable();
 	}
 
@@ -117,6 +161,58 @@ static void msm8960_backlight_on(void)
 	int rc = pm8921_gpio_config(PM_GPIO(24), &backlight_pwm);
 	if (rc)
 		dprintf(CRITICAL, "FAIL pm8921_gpio_config(): rc=%d.\n", rc);
+}
+
+#define PM8921_GPIO_BL_LED_EN_MITWOA           22
+#define PM8921_GPIO_BL_LED_EN_MITWO           13
+#define LM3530_I2C_ADDR                 (0x38)
+
+void panel_backlight_on_mitwoa(unsigned int on)
+{
+	int ret = 0;
+	static struct qup_i2c_dev *lm3530_dev = NULL;
+
+	if (on) {
+		lm3530_dev = qup_i2c_init(GSBI_ID_10, 100000, 24000000);
+
+		pmic8921_gpio_set(PM8921_GPIO_BL_LED_EN_MITWOA, 1);
+
+		ret += i2c_write(lm3530_dev, LM3530_I2C_ADDR, 0x10, 0x17);
+		ret += i2c_write(lm3530_dev, LM3530_I2C_ADDR, 0x20, 0x00);
+		ret += i2c_write(lm3530_dev, LM3530_I2C_ADDR, 0x30, 0x00);
+		ret += i2c_write(lm3530_dev, LM3530_I2C_ADDR, 0xA0, 0x1F);
+	} else {
+		ret += i2c_write(lm3530_dev, LM3530_I2C_ADDR, 0x10, 0x00);
+		pmic8921_gpio_set(PM8921_GPIO_BL_LED_EN_MITWOA, 0);
+		lm3530_dev = NULL;
+	}
+	if (ret) {
+		dprintf(CRITICAL, "panel_backlight_on: ret %d\n", ret);
+	}
+}
+
+void panel_backlight_on_mitwo(unsigned int on)
+{
+	int ret = 0;
+	static struct qup_i2c_dev *lm3530_dev = NULL;
+
+	if (on) {
+		lm3530_dev = qup_i2c_init(GSBI_ID_1, 100000, 24000000);
+
+		pmic8921_gpio_set(PM8921_GPIO_BL_LED_EN_MITWO, 1);
+
+		ret += i2c_write(lm3530_dev, LM3530_I2C_ADDR, 0x10, 0x17);
+		ret += i2c_write(lm3530_dev, LM3530_I2C_ADDR, 0x20, 0x00);
+		ret += i2c_write(lm3530_dev, LM3530_I2C_ADDR, 0x30, 0x00);
+		ret += i2c_write(lm3530_dev, LM3530_I2C_ADDR, 0xA0, 0x1F);
+	} else {
+		ret += i2c_write(lm3530_dev, LM3530_I2C_ADDR, 0x10, 0x00);
+		pmic8921_gpio_set(PM8921_GPIO_BL_LED_EN_MITWO, 0);
+		lm3530_dev = NULL;
+	}
+	if (ret) {
+		dprintf(CRITICAL, "panel_backlight_on: ret %d\n", ret);
+	}
 }
 
 /* Pull DISP_RST_N high to get panel out of reset */
@@ -163,18 +259,19 @@ static int msm8960_liquid_mipi_panel_clock(int enable)
 static int msm8960_mipi_panel_power(int enable)
 {
 	if (enable) {
-		msm8960_backlight_on();
-
 		/* Turn on LDO8 for lcd1 mipi vdd */
 		pm8921_ldo_set_voltage(LDO_8, LDO_VOLTAGE_3_0V);
 
+		pm8921_ldo_set_voltage(LDO_29, LDO_VOLTAGE_1_8V);
 		/* Turn on LDO23 for lcd1 mipi vddio */
 		pm8921_ldo_set_voltage(LDO_23, LDO_VOLTAGE_1_8V);
 
 		/* Turn on LDO2 for vdda_mipi_dsi */
 		pm8921_ldo_set_voltage(LDO_2, LDO_VOLTAGE_1_2V);
 
+		mdelay(3);
 		msm8960_mipi_panel_reset();
+		mdelay(5);
 	}
 
 	return 0;
@@ -273,10 +370,11 @@ void display_init(void)
 		panel.mdp_rev = MDP_REV_44;
 		break;
 	case LINUX_MACHTYPE_8064_MTP:
-		mipi_toshiba_video_wsvga_init(&(panel.panel_info));
+	case LINUX_MACHTYPE_8064_MITWO:
+		mipi_hitachi_cmd_hd720p_init(&(panel.panel_info));
 		panel.clk_func = fusion3_mtp_clock;
 		panel.power_func = fusion3_mtp_panel_power;
-		panel.fb.base = 0x89000000;
+		panel.fb.base = 0x89100000;
 		panel.fb.width =  panel.panel_info.xres;
 		panel.fb.height =  panel.panel_info.yres;
 		panel.fb.stride =  panel.panel_info.xres;
@@ -285,6 +383,18 @@ void display_init(void)
 		panel.mdp_rev = MDP_REV_44;
 		break;
 	case LINUX_MACHTYPE_8960_CDP:
+	case LINUX_MACHTYPE_8960_MITWOA:
+		mipi_lgd_cmd_hd720p_init(&(panel.panel_info));
+		panel.clk_func = msm8960_mipi_panel_clock;
+		panel.power_func = msm8960_mipi_panel_power;
+		panel.fb.base = 0x89100000;
+		panel.fb.width =  panel.panel_info.xres;
+		panel.fb.height =  panel.panel_info.yres;
+		panel.fb.stride =  panel.panel_info.xres;
+		panel.fb.bpp =  panel.panel_info.bpp;
+		panel.fb.format = FB_FORMAT_RGB888;
+		panel.mdp_rev = MDP_REV_44;
+		break;
 	case LINUX_MACHTYPE_8960_MTP:
 	case LINUX_MACHTYPE_8960_FLUID:
 		mipi_toshiba_video_wsvga_init(&(panel.panel_info));
@@ -308,6 +418,8 @@ void display_init(void)
 	}
 
 	display_image_on_screen();
+	mipi_dsi_cmd_trigger(&panel);
+
 	display_enable = 1;
 }
 

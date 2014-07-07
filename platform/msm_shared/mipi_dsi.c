@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -40,13 +41,17 @@
 #include <platform/timer.h>
 #include <err.h>
 #include <msm_panel.h>
+#include <board.h>
 
 extern void mdp_disable(void);
-extern int mipi_dsi_cmd_config(struct fbcon_config mipi_fb_cfg,
-			       unsigned short num_of_lanes);
+extern int mipi_dsi_cmd_config(unsigned short width, unsigned short height,
+		                    unsigned short num_of_lanes);
 extern void mdp_shutdown(void);
 extern void mdp_start_dma(void);
 extern void dsb(void);
+
+static uint32_t manu_id;
+static uint32_t manu_id0;
 
 #if DISPLAY_MIPI_PANEL_TOSHIBA
 static struct fbcon_config mipi_fb_cfg = {
@@ -84,6 +89,44 @@ struct mipi_dsi_panel_config novatek_panel_info = {
 	.panel_cmds = novatek_panel_cmd_mode_cmds,
 	.num_of_panel_cmds = ARRAY_SIZE(novatek_panel_cmd_mode_cmds),
 };
+#elif DISPLAY_MIPI_PANEL_RENESAS
+static struct fbcon_config mipi_fb_cfg = {
+	.height = REN_MIPI_FB_HEIGHT,
+	.width = REN_MIPI_FB_WIDTH,
+	.stride = REN_MIPI_FB_WIDTH,
+	.format = FB_FORMAT_RGB888,
+	.bpp = 24,
+	.update_start = NULL,
+	.update_done = NULL,
+};
+
+struct mipi_dsi_panel_config renesas_panel_info = {
+	.mode = MIPI_VIDEO_MODE,
+	.num_of_lanes = 2,
+	.dsi_phy_config = &mipi_dsi_renesas_panel_phy_ctrl,
+	.panel_cmds = renesas_panel_video_mode_cmds,
+	.num_of_panel_cmds = ARRAY_SIZE(renesas_panel_video_mode_cmds),
+	.lane_swap = 1,
+};
+#elif DISPLAY_MIPI_PANEL_RENESAS_HT
+static struct fbcon_config mipi_fb_cfg = {
+	.height = REN_MIPI_FB_HEIGHT,
+	.width = REN_MIPI_FB_WIDTH,
+	.stride = REN_MIPI_FB_WIDTH,
+	.format = FB_FORMAT_RGB888,
+	.bpp = 24,
+	.update_start = NULL,
+	.update_done = NULL,
+};
+
+struct mipi_dsi_panel_config renesas_panel_info = {
+	.mode = MIPI_CMD_MODE,
+	.num_of_lanes = 4,
+	.dsi_phy_config = &mipi_dsi_renesas_panel_phy_ctrl,
+	.panel_cmds = renesas_panel_cmd_mode_cmds,
+	.num_of_panel_cmds = ARRAY_SIZE(renesas_panel_cmd_mode_cmds),
+	.lane_swap = 1,
+};
 #else
 static struct fbcon_config mipi_fb_cfg = {
 	.height = 0,
@@ -106,6 +149,14 @@ struct mipi_dsi_panel_config *get_panel_info(void)
 	return &toshiba_panel_info;
 #elif DISPLAY_MIPI_PANEL_NOVATEK_BLUE
 	return &novatek_panel_info;
+#elif DISPLAY_MIPI_PANEL_RENESAS
+	if (machine_is_7x25a()) {
+		renesas_panel_info.num_of_lanes = 1;
+		mipi_fb_cfg.height = REN_MIPI_FB_HEIGHT_HVGA;
+	}
+	return &renesas_panel_info;
+#elif DISPLAY_MIPI_PANEL_RENESAS_HT
+	return &renesas_panel_info;
 #endif
 	return NULL;
 }
@@ -117,6 +168,7 @@ int dsi_cmd_dma_trigger_for_panel()
 	int status = 0;
 
 	writel(0x03030303, DSI_INT_CTRL);
+	dsb();
 	writel(0x1, DSI_CMD_MODE_DMA_SW_TRIGGER);
 	dsb();
 	ReadValue = readl(DSI_INT_CTRL) & 0x00000001;
@@ -132,6 +184,7 @@ int dsi_cmd_dma_trigger_for_panel()
 	}
 
 	writel((readl(DSI_INT_CTRL) | 0x01000001), DSI_INT_CTRL);
+	dsb();
 	dprintf(SPEW, "Panel CMD: command mode dma tested successfully\n");
 	return status;
 }
@@ -152,13 +205,43 @@ int mipi_dsi_cmds_tx(struct mipi_dsi_cmd *cmds, int count)
 	off += pload;
 
 	cm = cmds;
+
 	for (i = 0; i < count; i++) {
 		memcpy((void *)off, (cm->payload), cm->size);
 		writel(off, DSI_DMA_CMD_OFFSET);
+		dsb();
 		writel(cm->size, DSI_DMA_CMD_LENGTH);	// reg 0x48 for this build
 		dsb();
 		ret += dsi_cmd_dma_trigger_for_panel();
-		udelay(80);
+
+		if (count == sizeof(cmd_delay)/sizeof(int)) {
+			if (i < (sizeof(cmd_delay)/sizeof(int)))
+				mdelay(cmd_delay[i]);
+			else
+				mdelay(100);
+		}
+
+		if (count == sizeof(cmd_delay_lgd)/sizeof(int)) {
+			if (i < (sizeof(cmd_delay_lgd)/sizeof(int)))
+				mdelay(cmd_delay_lgd[i]);
+			else
+				mdelay(100);
+		}
+
+		if (count == sizeof(cmd_delay_auo)/sizeof(int)) {
+			if (i < (sizeof(cmd_delay_auo)/sizeof(int)))
+				mdelay(cmd_delay_auo[i]);
+			else
+				mdelay(100);
+		}
+
+		if (count == sizeof(cmd_delay_jdi)/sizeof(int)) {
+			if (i < (sizeof(cmd_delay_jdi)/sizeof(int)))
+				mdelay(cmd_delay_jdi[i]);
+			else
+				mdelay(100);
+		}
+
 		cm++;
 	}
 	return ret;
@@ -244,14 +327,88 @@ static uint32_t mipi_novatek_manufacture_id(void)
 	char *rp = rec_buf;
 	uint32_t *lp, data;
 
+	mipi_dsi_cmds_tx(&novatek_panel_max_packet_cmd, 1);
 	mipi_dsi_cmds_tx(&novatek_panel_manufacture_id_cmd, 1);
+	mipi_dsi_cmds_rx(&rp, 2);
+
+	lp = (uint32_t *) rp;
+	data = (uint32_t) * lp;
+	data = ntohl(data);
+	data = data >> 8;
+	dprintf(INFO, "mipi_novatek_manufacture_id 0x%x\n", data);
+	return data;
+}
+
+static uint32_t mipi_novatek_manufacture_id0(void)
+{
+	char rec_buf[24];
+	char *rp = rec_buf;
+	uint32_t *lp, data;
+
+	mipi_dsi_cmds_tx(&novatek_panel_manufacture_id0_cmd, 1);
 	mipi_dsi_cmds_rx(&rp, 3);
 
 	lp = (uint32_t *) rp;
 	data = (uint32_t) * lp;
 	data = ntohl(data);
 	data = data >> 8;
+	dprintf(INFO, "mipi_novatek_manufacture_id 0x%x\n", data);
 	return data;
+}
+
+int mipi_dsi_panel_initialize_prepare(struct mipi_dsi_panel_config *pinfo)
+{
+	unsigned char DMA_STREAM1 = 0;	// for mdp display processor path
+	unsigned char EMBED_MODE1 = 1;	// from frame buffer
+	unsigned char POWER_MODE2 = 1;	// from frame buffer
+	unsigned char PACK_TYPE1 = 1;	// long packet
+	unsigned char VC1 = 0;
+	unsigned char DT1 = 0;	// non embedded mode
+	unsigned short WC1 = 0;	// for non embedded mode only
+	int status = 0;
+	unsigned char DLNx_EN;
+
+	switch (pinfo->num_of_lanes) {
+	default:
+	case 1:
+		DLNx_EN = 1;	// 1 lane
+		break;
+	case 2:
+		DLNx_EN = 3;	// 2 lane
+		break;
+	case 3:
+		DLNx_EN = 7;	// 3 lane
+		break;
+	case 4:
+		DLNx_EN = 0x0F;	/* 4 lanes */
+		break;
+	}
+
+	writel(0x0001, DSI_SOFT_RESET);
+	writel(0x0000, DSI_SOFT_RESET);
+
+	writel((0 << 16) | 0x3f, DSI_CLK_CTRL);	/* Turn on all DSI Clks */
+	writel(DMA_STREAM1 << 8 | 0x04, DSI_TRIG_CTRL);	// reg 0x80 dma trigger: sw
+	// trigger 0x4; dma stream1
+
+	writel(0 << 30 | DLNx_EN << 4 | 0x105, DSI_CTRL);	// reg 0x00 for this
+	// build
+	writel(EMBED_MODE1 << 28 | POWER_MODE2 << 26
+	       | PACK_TYPE1 << 24 | VC1 << 22 | DT1 << 16 | WC1,
+	       DSI_COMMAND_MODE_DMA_CTRL);
+
+	return status;
+}
+
+int mipi_dsi_panel_initialize_cmds(struct mipi_dsi_panel_config *pinfo)
+{
+	int status = 0;
+
+	if (pinfo->panel_cmds)
+		status = mipi_dsi_cmds_tx(pinfo->panel_cmds,
+					  pinfo->num_of_panel_cmds);
+
+	return status;
 }
 
 int mipi_dsi_panel_initialize(struct mipi_dsi_panel_config *pinfo)
@@ -393,6 +550,15 @@ config_dsi_video_mode(unsigned short disp_width, unsigned short disp_height,
 	return status;
 }
 
+void trigger_mdp_dsi(void)
+{
+	dsb();
+	mdp_start_dma();
+	mdelay(10);
+	dsb();
+	writel(0x1, DSI_CMD_MODE_MDP_SW_TRIGGER);
+}
+
 int
 config_dsi_cmd_mode(unsigned short disp_width, unsigned short disp_height,
 		    unsigned short img_width, unsigned short img_height,
@@ -427,8 +593,21 @@ config_dsi_cmd_mode(unsigned short disp_width, unsigned short disp_height,
 	DST_FORMAT = 8;		// RGB888
 	dprintf(SPEW, "DSI_Cmd_Mode - Dst Format: RGB888\n");
 
-	DLNx_EN = 3;		// 2 lane with clk programming
-	dprintf(SPEW, "Data Lane: 2 lane\n");
+	switch (datalane_num) {
+	default:
+	case 1:
+		DLNx_EN = 1;
+		break;
+	case 2:
+		DLNx_EN = 3;
+		break;
+	case 3:
+		DLNx_EN = 7;
+		break;
+	case 4:
+		DLNx_EN = 0xF;
+		break;
+	}
 
 	TRAFIC_MODE = 0;	// non burst mode with sync pulses
 	dprintf(SPEW, "Traffic mode: non burst mode with sync pulses\n");
@@ -456,8 +635,10 @@ config_dsi_cmd_mode(unsigned short disp_width, unsigned short disp_height,
 	writel(0x00000040, DSI_ERR_INT_MASK0);
 	writel(0x1, DSI_EOT_PACKET_CTRL);
 	// writel(0x0, MDP_OVERLAYPROC0_START);
+	dsb();
 	mdp_start_dma();
 	mdelay(10);
+	dsb();
 	writel(0x1, DSI_CMD_MODE_MDP_SW_TRIGGER);
 
 	status = 1;
@@ -530,7 +711,6 @@ int is_cmd_mode_enabled(void)
 	return cmd_mode_status;
 }
 
-#if DISPLAY_MIPI_PANEL_NOVATEK_BLUE
 void mipi_dsi_cmd_mode_trigger(void)
 {
 	int status = 0;
@@ -540,14 +720,38 @@ void mipi_dsi_cmd_mode_trigger(void)
 	unsigned short image_ht = mipi_fb_cfg.height;
 	unsigned short dst_format = 0;
 	unsigned short traffic_mode = 0;
-	struct mipi_dsi_panel_config *panel_info = &novatek_panel_info;
-	status += mipi_dsi_cmd_config(mipi_fb_cfg, panel_info->num_of_lanes);
+	struct mipi_dsi_panel_config *panel_info = get_panel_info();
+	status += mipi_dsi_cmd_config(display_wd, display_ht, panel_info->num_of_lanes);
 	mdelay(50);
 	config_dsi_cmd_mode(display_wd, display_ht, image_wd, image_ht,
-			    dst_format, traffic_mode,
-			    panel_info->num_of_lanes /* num_of_lanes */ );
+			dst_format, traffic_mode,
+			panel_info->num_of_lanes /* num_of_lanes */ );
 }
-#endif
+
+void mipi_dsi_cmd_trigger(struct msm_fb_panel_data *pdata)
+{
+	struct msm_panel_info *pinfo = NULL;
+
+	if (pdata)
+		pinfo = &(pdata->panel_info);
+	else
+		return;
+
+	unsigned short display_wd = pinfo->xres;
+	unsigned short display_ht = pinfo->yres;
+	unsigned short image_wd = pinfo->xres;
+	unsigned short image_ht = pinfo->yres;
+	unsigned short dst_format = 0;
+	unsigned short traffic_mode = 0;
+	unsigned short num_of_lanes = pinfo->mipi.num_of_lanes;
+
+	mipi_dsi_cmd_config(display_wd, display_ht, num_of_lanes);
+	mdelay(50);
+	config_dsi_cmd_mode(display_wd, display_ht, image_wd, image_ht,
+			dst_format, traffic_mode,
+			num_of_lanes /* num_of_lanes */ );
+
+}
 
 void mipi_dsi_shutdown(void)
 {
@@ -556,9 +760,16 @@ void mipi_dsi_shutdown(void)
 		mdp_shutdown();
 		writel(0x01010101, DSI_INT_CTRL);
 		writel(0x13FF3BFF, DSI_ERR_INT_MASK0);
-
-#if (DISPLAY_MIPI_PANEL_NOVATEK_BLUE \
-	|| DISPLAY_MIPI_PANEL_TOSHIBA)
+#if defined(DISPLAY_MIPI_PANEL_TOSHIBA_MDT61) || defined(DISPLAY_MIPI_PANEL_RENESAS_HT)
+		/* Disable branch clocks */
+		writel(0x0, DSI1_BYTE_CC_REG);
+		writel(0x0, DSI_PIXEL_CC_REG);
+		writel(0x0, DSI1_ESC_CC_REG);
+		/* Disable root clock */
+		writel(0x0, DSI_CC_REG);
+#elif (DISPLAY_MIPI_PANEL_NOVATEK_BLUE \
+	 || DISPLAY_MIPI_PANEL_TOSHIBA)\
+	 || (!DISPLAY_MIPI_PANEL_RENESAS)
 		secure_writel(0x0, DSI_CC_REG);
 		secure_writel(0x0, DSI_PIXEL_CC_REG);
 #endif
@@ -592,7 +803,7 @@ struct fbcon_config *mipi_init(void)
 	writel(0x00001800, MMSS_SFPB_GPREG);
 #endif
 
-#if DISPLAY_MIPI_PANEL_TOSHIBA_MDT61
+#if defined(DISPLAY_MIPI_PANEL_TOSHIBA_MDT61) || defined(DISPLAY_MIPI_PANEL_RENESAS_HT)
 	mipi_dsi_phy_init(panel_info);
 #else
 	mipi_dsi_phy_ctrl_config(panel_info);
@@ -613,6 +824,13 @@ struct fbcon_config *mipi_init(void)
 		cmd_mode_status = 1;
 
 	return &mipi_fb_cfg;
+}
+
+void panel_manu_id_detection(void)
+{
+	mipi_dsi_cmd_bta_sw_trigger();
+	manu_id = mipi_novatek_manufacture_id();
+	manu_id0 = mipi_novatek_manufacture_id0();
 }
 
 int mipi_config(struct msm_fb_panel_data *panel)
@@ -640,7 +858,33 @@ int mipi_config(struct msm_fb_panel_data *panel)
 
 	mipi_dsi_phy_init(&mipi_pinfo);
 
-	ret += mipi_dsi_panel_initialize(&mipi_pinfo);
+	ret += mipi_dsi_panel_initialize_prepare(&mipi_pinfo);
+
+	if (board_target_id() == LINUX_MACHTYPE_8064_MITWO || (board_target_id() == LINUX_MACHTYPE_8064_MTP)) {
+		if (panel_id_detection()) {
+			mipi_pinfo.panel_cmds = hitachi_panel_cmd_mode_cmds;
+			mipi_pinfo.num_of_panel_cmds = ARRAY_SIZE(hitachi_panel_cmd_mode_cmds);
+		} else {
+			mipi_pinfo.panel_cmds = sharp_panel_cmd_mode_cmds;
+			mipi_pinfo.num_of_panel_cmds = ARRAY_SIZE(sharp_panel_cmd_mode_cmds);
+		}
+	} else {
+		panel_manu_id_detection();
+		if ((manu_id) && (manu_id0)) {
+			mipi_pinfo.panel_cmds = lgd_panel_cmd_mode_cmds;
+			mipi_pinfo.num_of_panel_cmds = ARRAY_SIZE(lgd_panel_cmd_mode_cmds);
+		}
+		if ((manu_id)&& !manu_id0) {
+			mipi_pinfo.panel_cmds = auo_panel_cmd_mode_cmds;
+			mipi_pinfo.num_of_panel_cmds = ARRAY_SIZE(auo_panel_cmd_mode_cmds);
+		}
+		if (manu_id == 0x60 && manu_id0 == 0x141304) {
+			mipi_pinfo.panel_cmds = jdi_panel_cmd_mode_cmds;
+			mipi_pinfo.num_of_panel_cmds = ARRAY_SIZE(jdi_panel_cmd_mode_cmds);
+		}
+	}
+
+	ret += mipi_dsi_panel_initialize_cmds(&mipi_pinfo);
 
 	if (pinfo->rotate && panel->rotate)
 		pinfo->rotate();

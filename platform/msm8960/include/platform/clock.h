@@ -1,5 +1,6 @@
 /*
  * * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -310,13 +311,13 @@ struct pll_rate {
 #define BYTE_NS_VAL           0x00000001
 #define BYTE_CC_VAL           0x00000004
 
-#define PIXEL_NS_VAL          0x00F80003
+#define PIXEL_NS_VAL          0x00002003
 #define PIXEL_MD_VAL          0x000001FB
-#define PIXEL_CC_VAL          0x00000080
+#define PIXEL_CC_VAL          0x00000005
 
-#define DSI_NS_VAL            0xFA000003
+#define DSI_NS_VAL            0x00000003
 #define DSI_MD_VAL            0x000003FB
-#define DSI_CC_VAL            0x00000080
+#define DSI_CC_VAL            0x00000005
 
 void config_mmss_clk(uint32_t ns,
              uint32_t md,

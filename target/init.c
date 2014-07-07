@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008 Travis Geiselbrecht
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files
@@ -83,7 +84,7 @@ __WEAK void target_serialno(unsigned char *buf)
 	snprintf((char *) buf, 13, "%s",TARGET(BOARD));
 }
 
-__WEAK void target_fastboot_init()
+__WEAK void target_fastboot_init(int fastboot_reason)
 {
 }
 

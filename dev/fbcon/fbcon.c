@@ -3,6 +3,7 @@
  * All rights reserved.
  *
  * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,6 +36,7 @@
 #include <splash.h>
 #include <platform.h>
 #include <string.h>
+#include <smem.h>
 
 #include "font5x12.h"
 
@@ -54,11 +56,16 @@ static struct fbcon_config *config = NULL;
 #define FONT_WIDTH		5
 #define FONT_HEIGHT		12
 
+#define LOGO_START_X 316
+#define LOGO_START_Y 541
+
 static uint16_t			BGCOLOR;
 static uint16_t			FGCOLOR;
 
 static struct pos		cur_pos;
 static struct pos		max_pos;
+
+void trigger_mdp_dsi(void);
 
 static void fbcon_drawglyph(uint16_t *pixels, uint16_t paint, unsigned stride,
 			    unsigned *glyph)
@@ -122,7 +129,6 @@ void fbcon_clear(void)
 	unsigned count = config->width * config->height;
 	memset(config->base, BGCOLOR, count * ((config->bpp) / 8));
 }
-
 
 static void fbcon_set_colors(unsigned bg, unsigned fg)
 {
@@ -211,8 +217,6 @@ struct fbcon_config* fbcon_display(void)
 void display_image_on_screen(void)
 {
     unsigned i = 0;
-    unsigned total_x;
-    unsigned total_y;
     unsigned bytes_per_bpp;
     unsigned image_base;
 
@@ -221,13 +225,9 @@ void display_image_on_screen(void)
        return;
     }
 
-    fbcon_clear();
-
-    total_x = config->width;
-    total_y = config->height;
     bytes_per_bpp = ((config->bpp) / 8);
-    image_base = ((((total_y/2) - (SPLASH_IMAGE_WIDTH / 2) - 1) *
-		    (config->width)) + (total_x/2 - (SPLASH_IMAGE_HEIGHT / 2)));
+    image_base = LOGO_START_Y * (config->width) + LOGO_START_X;
+    fbcon_clear();
 
 #if DISPLAY_TYPE_MIPI
     if (bytes_per_bpp == 3)
@@ -240,21 +240,72 @@ void display_image_on_screen(void)
 	}
     }
     fbcon_flush();
-#if DISPLAY_MIPI_PANEL_NOVATEK_BLUE
+#if defined(DISPLAY_MIPI_PANEL_NOVATEK_BLUE) || defined(DISPLAY_MIPI_PANEL_RENESAS_HT)
     if(is_cmd_mode_enabled())
         mipi_dsi_cmd_mode_trigger();
 #endif
-
 #else
     if (bytes_per_bpp == 2)
     {
         for (i = 0; i < SPLASH_IMAGE_WIDTH; i++)
         {
             memcpy (config->base + ((image_base + (i * (config->width))) * bytes_per_bpp),
-		    imageBuffer + (i * SPLASH_IMAGE_HEIGHT * bytes_per_bpp),
+		    imageBuffer_rgb888 + (i * SPLASH_IMAGE_HEIGHT * bytes_per_bpp),
 		    SPLASH_IMAGE_HEIGHT * bytes_per_bpp);
 	}
     }
     fbcon_flush();
+#endif
+}
+
+void getfastbootreason(unsigned int ifreason, char *sfreason)
+{
+	switch (ifreason){
+		case 1:
+			strcpy(sfreason, "KEY PRESS");
+			break;
+		case 2:
+			strcpy(sfreason, "REBOOT PARAM");
+			break;
+		case 3:
+			strcpy(sfreason, "NO BOOTIMG");
+			break;
+		default:
+			strcpy(sfreason, "UNKNOWN");
+			break;
+	}
+}
+
+void display_fastboot_image_on_screen(unsigned fastboot_reason)
+{
+    unsigned i = 0;
+    unsigned total_x = config->width;
+    unsigned total_y = config->height;
+    unsigned bytes_per_bpp = ((config->bpp) / 8);
+    unsigned image_base = ((((total_y/2) - (SPLASH_IMAGE_WIDTH_FASTBOOT / 2) - 1) *
+			    (config->width)) + (total_x/2 - (SPLASH_IMAGE_HEIGHT_FASTBOOT / 2)));
+    char sreason[20];
+
+    fbcon_clear();
+#if DISPLAY_TYPE_MIPI
+    trigger_mdp_dsi();
+#endif
+    getfastbootreason(fastboot_reason, sreason);
+
+    dprintf(INFO, "Build Date: "__DATE__","__TIME__"\n");
+    dprintf(INFO, "Fastboot Mode: Enter Fastboot reason %s\n", sreason);
+
+    if (bytes_per_bpp == 3)
+    {
+        for (i = 0; i < SPLASH_IMAGE_WIDTH_FASTBOOT; i++)
+        {
+            memcpy (config->base + ((image_base + (i * (config->width))) * bytes_per_bpp),
+                   imageBuffer_fastboot_rgb888 + (i * SPLASH_IMAGE_HEIGHT_FASTBOOT * bytes_per_bpp),
+                   SPLASH_IMAGE_HEIGHT_FASTBOOT * bytes_per_bpp);
+        }
+    }
+    fbcon_flush();
+#if DISPLAY_TYPE_MIPI
+    trigger_mdp_dsi();
 #endif
 }

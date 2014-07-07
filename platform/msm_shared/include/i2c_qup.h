@@ -1,4 +1,5 @@
 /* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -109,6 +110,9 @@ struct qup_i2c_dev *qup_i2c_init(uint8_t gsbi_id,
 				 unsigned clk_freq, unsigned src_clk_freq);
 int qup_i2c_deinit(struct qup_i2c_dev *dev);
 int qup_i2c_xfer(struct qup_i2c_dev *dev, struct i2c_msg msgs[], int num);
+uint8_t i2c_read(struct qup_i2c_dev *dev, uint8_t i2c_addr, uint8_t reg_addr);
+uint8_t i2c_write(struct qup_i2c_dev *dev, uint8_t i2c_addr,
+				 uint8_t reg_addr, uint8_t reg_val);
 
 struct device {
 	struct device *parent;

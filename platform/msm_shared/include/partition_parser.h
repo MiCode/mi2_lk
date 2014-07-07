@@ -1,5 +1,6 @@
 /* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
-
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -175,8 +176,8 @@ unsigned int write_mbr(unsigned size, unsigned char *mbrImage,
 		       struct mmc_boot_card *mmc_card);
 unsigned int write_gpt(unsigned size, unsigned char *gptImage,
 		       struct mmc_boot_host *mmc_host,
-		       struct mmc_boot_card *mmc_card);
-unsigned int write_partition(unsigned size, unsigned char *partition);
+		       struct mmc_boot_card *mmc_card, int erase);
+unsigned int write_partition(unsigned size, unsigned char *partition, int erase);
 
 /* For Debugging */
 void partition_dump(void);

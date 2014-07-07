@@ -1,4 +1,5 @@
 /* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -32,12 +33,49 @@
 
 #define LINUX_MACHTYPE_UNKNOWN 0
 
+/* 8960 */
+#define LINUX_MACHTYPE_8960_SIM     3230
+#define LINUX_MACHTYPE_8960_RUMI3   3231
+#define LINUX_MACHTYPE_8960_CDP     3396
+#define LINUX_MACHTYPE_8960_MTP     3397
+#define LINUX_MACHTYPE_8960_FLUID   3398
+#define LINUX_MACHTYPE_8960_APQ     3399
+#define LINUX_MACHTYPE_8960_LIQUID  3535
+#define LINUX_MACHTYPE_8960_MITWOA  4459
+
+/* 8627 */
+#define LINUX_MACHTYPE_8627_CDP     3861
+#define LINUX_MACHTYPE_8627_MTP     3862
+
+/* 8930 */
+#define LINUX_MACHTYPE_8930_CDP     3727
+#define LINUX_MACHTYPE_8930_MTP     3728
+#define LINUX_MACHTYPE_8930_FLUID   3729
+
+/* 8064 */
+#define LINUX_MACHTYPE_8064_SIM     3572
+#define LINUX_MACHTYPE_8064_RUMI3   3679
+#define LINUX_MACHTYPE_8064_CDP     3948
+#define LINUX_MACHTYPE_8064_MTP     3949
+#define LINUX_MACHTYPE_8064_LIQUID  3951
+#define LINUX_MACHTYPE_8064_MPQ_CDP 3993
+#define LINUX_MACHTYPE_8064_MPQ_HRD 3994
+#define LINUX_MACHTYPE_8064_MPQ_DTV 3995
+#define LINUX_MACHTYPE_8064_HRD     3994
+#define LINUX_MACHTYPE_8064_DTV     3995
+#define LINUX_MACHTYPE_8064_MITWO   4180
+
 struct board_data {
 	uint32_t platform;
 	uint32_t platform_hw;
 	uint32_t platform_subtype;
 	uint32_t target;
 	uint32_t baseband;
+	uint32_t platform_version;
+	uint32_t soc_id;
+	uint32_t soc_version;
+	uint32_t pmic_model;
+	uint32_t pmic_die_version;
 };
 
 void board_init();
@@ -47,5 +85,8 @@ uint32_t board_platform_id();
 uint32_t board_target_id();
 uint32_t board_baseband();
 uint32_t board_hardware_id();
-
+uint32_t board_soc_id();
+uint32_t board_soc_version();
+uint32_t board_pmic_model();
+uint32_t board_pmic_die_version();
 #endif

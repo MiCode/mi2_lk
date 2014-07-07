@@ -2,6 +2,7 @@
  * Copyright (c) 2009, Google Inc.
  * All rights reserved.
  * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -49,11 +50,14 @@
 #include <crypto_hash.h>
 #include <board.h>
 #include <target/board.h>
+#include "../../app/aboot/aboot.h"
 
 extern void dmb(void);
 extern void msm8960_keypad_init(void);
+extern void apq8064_keypad_init(void);
 extern void msm8930_keypad_init(void);
-extern void panel_backlight_on(void);
+extern void panel_backlight_on_mitwo(unsigned int on);
+extern void panel_backlight_on_mitwoa(unsigned int on);
 
 static unsigned mmc_sdc_base[] =
     { MSM_SDC1_BASE, MSM_SDC2_BASE, MSM_SDC3_BASE, MSM_SDC4_BASE };
@@ -70,6 +74,10 @@ static pm8921_dev_t pmic;
 static crypto_engine_type platform_ce_type = CRYPTO_ENGINE_TYPE_SW;
 
 static void target_uart_init(void);
+unsigned target_check_power_on_reason(void);
+unsigned check_reboot_mode(void);
+static void target_shutdown_for_battinfo(void);
+static void target_shutdown_for_pwrkey(void);
 
 void target_early_init(void)
 {
@@ -98,11 +106,17 @@ void target_init(void)
 
 	dprintf(INFO, "target_init()\n");
 
+	pu_reason = target_check_power_on_reason();
+	reboot_mode = check_reboot_mode();
+
 	/* Initialize PMIC driver */
 	pmic.read = (pm8921_read_func) & pa1_ssbi2_read_bytes;
 	pmic.write = (pm8921_write_func) & pa1_ssbi2_write_bytes;
 
 	pm8921_init(&pmic);
+
+	target_shutdown_for_battinfo();
+	target_shutdown_for_pwrkey();
 
 	/* Keypad init */
 	keys_init();
@@ -133,8 +147,15 @@ void target_init(void)
 
 	/* Display splash screen if enabled */
 #if DISPLAY_SPLASH_SCREEN
+	if (board_target_id() == LINUX_MACHTYPE_8960_CDP || (board_target_id() == LINUX_MACHTYPE_8960_MITWOA))
+		panel_backlight_on_mitwoa(0);
 	display_init();
-	dprintf(SPEW, "Diplay initialized\n");
+	dprintf(INFO, "Diplay initialized\n");
+	mdelay(34);
+	if (board_target_id() == LINUX_MACHTYPE_8064_MITWO || (board_target_id() == LINUX_MACHTYPE_8064_MTP))
+		panel_backlight_on_mitwo(1);
+	else
+		panel_backlight_on_mitwoa(1);
 #endif
 
 	if ((platform_id == MSM8960) || (platform_id == MSM8960AB) ||
@@ -173,7 +194,7 @@ unsigned target_baseband()
 	return board_baseband();
 }
 
-static unsigned target_check_power_on_reason(void)
+unsigned target_check_power_on_reason(void)
 {
 	unsigned power_on_status = 0;
 	unsigned int status_len = sizeof(power_on_status);
@@ -186,8 +207,76 @@ static unsigned target_check_power_on_reason(void)
 		dprintf(CRITICAL,
 			"ERROR: unable to read shared memory for power on reason\n");
 	}
-	dprintf(INFO, "Power on reason %u\n", power_on_status);
+	dprintf(INFO, "Power on reason %x\n", power_on_status);
 	return power_on_status;
+}
+
+unsigned target_check_battinfo(void)
+{
+	unsigned battinfo = 0;
+	unsigned int battinfo_len = sizeof(battinfo);
+	unsigned smem_status;
+
+	smem_status = smem_read_alloc_entry(SMEM_BATT_INFO,
+			&battinfo, battinfo_len);
+
+	if (smem_status)
+		dprintf(CRITICAL, "ERROR: unable to read shared memory for battinfo\n");
+
+	dprintf(INFO, "battinfo 0x%x\n", battinfo);
+	return battinfo;
+}
+
+unsigned target_check_keyinfo(void)
+{
+	unsigned keyinfo = 0;
+	unsigned int keyinfo_len = sizeof(keyinfo);
+	unsigned smem_status;
+
+	smem_status = smem_read_alloc_entry(SMEM_KEYPAD_KEYS_PRESSED,
+			&keyinfo, keyinfo_len);
+
+	if (smem_status){
+		dprintf(CRITICAL, "ERROR: unable to read shared memory for keyinfo\n");
+	}
+	dprintf(INFO, "keyinfo 0x%x\n", keyinfo);
+	return keyinfo;
+}
+
+unsigned target_check_ddrinfo(void)
+{
+	unsigned ddrinfo = 0;
+	unsigned int ddrinfo_len = sizeof(ddrinfo);
+	unsigned smem_status;
+
+	smem_status = smem_read_alloc_entry(SMEM_ID_VENDOR_DDR2,
+			&ddrinfo, ddrinfo_len);
+
+	if (smem_status)
+		dprintf(CRITICAL, "ERROR: unable to read shared memory for ddrinfo\n");
+
+	dprintf(INFO, "ddrinfo 0x%x\n", ddrinfo);
+	return ddrinfo;
+}
+
+static void target_shutdown_for_battinfo(void)
+{
+	unsigned battinfo = 0;
+
+	battinfo = target_check_battinfo();
+	if (battinfo == 0x10) {
+		dprintf(INFO, "Battery is weak and no charger\n");
+		shutdown_device();
+	}
+}
+
+static void target_shutdown_for_pwrkey(void)
+{
+	if (pu_reason == PWR_ON_EVENT_KEYPAD && target_check_keyinfo() == 0)
+	{
+		dprintf(CRITICAL, "Key is not pressed long enough\n");
+		shutdown_device();
+	}
 }
 
 void reboot_device(unsigned reboot_reason)
@@ -219,12 +308,35 @@ unsigned check_reboot_mode(void)
 	restart_reason = readl(RESTART_REASON_ADDR);
 	writel(0x00, RESTART_REASON_ADDR);
 
+	switch (restart_reason) {
+	case KPANIC_MODE:
+		pu_reason |= RESTART_EVENT_KPANIC;
+		break;
+	case WDOG_MODE:
+		pu_reason |= RESTART_EVENT_WDOG;
+		break;
+	case NORMAL_MODE:
+	case FASTBOOT_MODE:
+	case RECOVERY_MODE:
+	case BOOT0_MODE:
+	case BOOT1_MODE:
+		pu_reason |= RESTART_EVENT_NORMAL;
+		break;
+	case OTHER_MODE:
+		pu_reason |= RESTART_EVENT_OTHER;
+		break;
+	default:
+		break;
+	}
+
+	dprintf(INFO, "reboot_mode 0x%x pu_reason 0x%x\n", restart_reason, pu_reason);
 	return restart_reason;
 }
 
 unsigned target_pause_for_battery_charge(void)
 {
-	if (target_check_power_on_reason() == PWR_ON_EVENT_WALL_CHG)
+	if ( pu_reason == PWR_ON_EVENT_WALL_CHG
+		|| pu_reason == PWR_ON_EVENT_USB_CHG )
 		return 1;
 
 	return 0;
@@ -244,8 +356,9 @@ void target_battery_charging_enable(unsigned enable, unsigned disconnect)
 }
 
 /* Do any target specific intialization needed before entering fastboot mode */
-void target_fastboot_init(void)
+void target_fastboot_init(int fastboot_reason)
 {
+	display_fastboot_image_on_screen(fastboot_reason);
 	/* Set the BOOT_DONE flag in PM8921 */
 	pm8921_boot_done();
 }
@@ -276,7 +389,6 @@ void target_uart_init(void)
 	case LINUX_MACHTYPE_8930_CDP:
 	case LINUX_MACHTYPE_8930_MTP:
 	case LINUX_MACHTYPE_8930_FLUID:
-
 		uart_dm_init(5, 0x16400000, 0x16440000);
 		break;
 
@@ -288,6 +400,7 @@ void target_uart_init(void)
 	case LINUX_MACHTYPE_8064_CDP:
 	case LINUX_MACHTYPE_8064_MTP:
 	case LINUX_MACHTYPE_8064_LIQUID:
+	case LINUX_MACHTYPE_8064_MITWO:
 		uart_dm_init(7, 0x16600000, 0x16640000);
 		break;
 
@@ -299,7 +412,6 @@ void target_uart_init(void)
 
 	case LINUX_MACHTYPE_8627_CDP:
 	case LINUX_MACHTYPE_8627_MTP:
-
 		uart_dm_init(5, 0x16400000, 0x16440000);
 		break;
 
@@ -395,8 +507,11 @@ void target_detect(struct board_data *board)
 		case HW_PLATFORM_LIQUID:
 			target_id = LINUX_MACHTYPE_8064_LIQUID;
 			break;
+		case HW_PLATFORM_OEM:
+			target_id = LINUX_MACHTYPE_8064_MITWO;
+			break;
 		default:
-			target_id = LINUX_MACHTYPE_8064_CDP;
+			target_id = LINUX_MACHTYPE_8064_MTP;
 		}
 	} else {
 		dprintf(CRITICAL, "platform (%d) is not identified.\n",
@@ -439,6 +554,12 @@ int target_cont_splash_screen()
 	switch(board_platform_id())
 	{
 	case MSM8960:
+	case APQ8064:
+		/* Splash screen and continuous splash screen feature is not
+		 * supported on 8960 Liquid target. But kernel display driver
+		 * crashes on Liquid if display clocks are disabled. Until that is
+		 * fixed, assume this feature is enabled for Liquid also.
+		 */
 	case MSM8960AB:
 	case APQ8060AB:
 	case MSM8260AB:

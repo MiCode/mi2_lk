@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,13 +30,15 @@
 #ifndef _TARGET_MSM8960_DISPLAY_H
 #define _TARGET_MSM8960_DISPLAY_H
 
-#define MIPI_FB_ADDR  0x89000000
+#define MIPI_FB_ADDR  0x89100000
 
 /* Toshiba MDT61 Mipi Panel */
 /* Unique to this panel, display width is 800, image is 600 */
 #define TSH_MDT61_DISPLAY_WIDTH      800
 #define TSH_MDT61_MIPI_FB_WIDTH      (TSH_MDT61_DISPLAY_WIDTH - 200)
 #define TSH_MDT61_MIPI_FB_HEIGHT     1024
+#define REN_MIPI_FB_WIDTH		720
+#define REN_MIPI_FB_HEIGHT		1280
 
 #define MIPI_HSYNC_PULSE_WIDTH       8
 #define MIPI_HSYNC_BACK_PORCH_DCLK   16

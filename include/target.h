@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008 Travis Geiselbrecht
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files
@@ -45,7 +46,6 @@ void target_battery_charging_enable(unsigned enable, unsigned disconnect);
 unsigned target_pause_for_battery_charge(void);
 unsigned target_baseband(void);
 void target_serialno(unsigned char *buf);
-void target_fastboot_init(void);
-
-
+void target_fastboot_init(int fastboot_reason);
+unsigned target_check_ddrinfo(void);
 #endif

@@ -3,6 +3,7 @@
  * All rights reserved.
  *
  * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -247,6 +248,7 @@ enum platform {
 	HW_PLATFORM_FFA = 2,
 	HW_PLATFORM_FLUID = 3,
 	HW_PLATFORM_SVLTE = 4,
+	HW_PLATFORM_OEM = 5,
 	HW_PLATFORM_QT = 6,
 	HW_PLATFORM_MTP = 8,
 	HW_PLATFORM_LIQUID = 9,
@@ -268,12 +270,25 @@ enum platform_subtype {
 	HW_PLATFORM_SUBTYPE_32BITS = 0x7FFFFFFF
 };
 
+enum platform_version {
+	HW_PLATFORM_P0 = 0x0,
+	HW_PLATFORM_P1 = 0x10,
+	HW_PLATFORM_P2 = 0x20,
+	HW_PLATFORM_P3 = 0x30
+};
+
 typedef enum {
 	SMEM_SPINLOCK_ARRAY = 7,
 
 	SMEM_AARM_PARTITION_TABLE = 9,
 
+	SMEM_KEYPAD_KEYS_PRESSED = 90,
+
+	SMEM_BATT_INFO = 105,
+
 	SMEM_APPS_BOOT_MODE = 106,
+
+	SMEM_ID_VENDOR_DDR2 = 136,
 
 	SMEM_BOARD_INFO_LOCATION = 137,
 
@@ -371,9 +386,21 @@ struct smem_ram_ptable {
 } __attribute__ ((__packed__));
 
 /* Power on reason/status info */
-#define PWR_ON_EVENT_RTC_ALARM 0x2
-#define PWR_ON_EVENT_USB_CHG   0x20
-#define PWR_ON_EVENT_WALL_CHG  0x40
+#define PWR_ON_EVENT_KEYPAD	0x1
+#define PWR_ON_EVENT_RTC_ALARM	0x2
+#define PWR_ON_EVENT_CABLE	0x4
+#define PWR_ON_EVENT_SMPL	0x8
+#define PWR_ON_EVENT_WDOG	0x10
+#define PWR_ON_EVENT_USB_CHG	0x20
+#define PWR_ON_EVENT_WALL_CHG	0x40
+
+#define RESTART_EVENT_WDOG	0x10000
+#define RESTART_EVENT_MPM	0x20000
+#define RESTART_EVENT_SRST	0x30000
+#define RESTART_EVENT_SECRST	0x40000
+#define RESTART_EVENT_KPANIC	0x80000
+#define RESTART_EVENT_NORMAL	0x100000
+#define RESTART_EVENT_OTHER	0x200000
 
 unsigned smem_read_alloc_entry_offset(smem_mem_type_t type, void *buf, int len,
 				      int offset);

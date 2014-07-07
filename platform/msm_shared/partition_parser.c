@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2014, Xiaomi Corporation. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -571,7 +572,8 @@ patch_gpt(unsigned char *gptImage,
  */
 unsigned int
 write_gpt(unsigned size, unsigned char *gptImage,
-	  struct mmc_boot_host *mmc_host, struct mmc_boot_card *mmc_card)
+	  struct mmc_boot_host *mmc_host, struct mmc_boot_card *mmc_card,
+	  int erase)
 {
 	unsigned int ret = MMC_BOOT_E_INVAL;
 	unsigned int header_size;
@@ -619,11 +621,13 @@ write_gpt(unsigned size, unsigned char *gptImage,
 	patch_gpt(gptImage, mmc_card, partition_entry_array_size,
 		  max_partition_count, partition_entry_size);
 
-	/* Erasing the eMMC card before writing */
-	ret = mmc_erase_card(0x00000000, mmc_card->capacity);
-	if (ret) {
-		dprintf(CRITICAL, "Failed to erase the eMMC card\n");
-		goto end;
+	if (erase) {
+		/* Erasing the eMMC card before writing */
+		ret = mmc_erase_card(0x00000000, mmc_card->capacity);
+		if (ret) {
+			dprintf(CRITICAL, "Failed to erase the eMMC card\n");
+			goto end;
+		}
 	}
 
 	/* Writing protective MBR */
@@ -691,7 +695,7 @@ write_gpt(unsigned size, unsigned char *gptImage,
 	return ret;
 }
 
-unsigned int write_partition(unsigned size, unsigned char *partition)
+unsigned int write_partition(unsigned size, unsigned char *partition, int erase)
 {
 	unsigned int ret = MMC_BOOT_E_INVAL;
 	unsigned int partition_type;
@@ -719,7 +723,7 @@ unsigned int write_partition(unsigned size, unsigned char *partition)
 
 	case PARTITION_TYPE_GPT:
 		dprintf(INFO, "Writing GPT partition\n");
-		ret = write_gpt(size, partition, mmc_host, mmc_card);
+		ret = write_gpt(size, partition, mmc_host, mmc_card, erase);
 		dprintf(CRITICAL, "Re-Flash all the partitions\n");
 		break;
 
